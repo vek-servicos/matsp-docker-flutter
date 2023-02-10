@@ -1,65 +1,98 @@
 FROM ubuntu:20.04
 
+# Build Variables
+ARG ANDROID_BUILD_TOOLS_VERSION="30.0.3"
+ARG ANDROID_PLATFORM_VERSION="30"
+ARG ANDROID_CMDLINE_TOOLS_BUILD="7583922"
+ARG ANDROID_CMDLINE_TOOLS_VERSION="5.0"
+ARG FLUTTER_VERSION="2.10.5"
+ARG JAVA_VERSION="11"
+ARG USER="developer"
+
+# install all dependencies
+ARG DEBIAN_FRONTEND="noninteractive"
+RUN apt-get update -y
+RUN apt-get install --yes --no-install-recommends sudo curl unzip sed git bash xz-utils libglvnd0 ssh xauth x11-xserver-utils libpulse0 libxcomposite1 libgl1-mesa-glx
+RUN apt-get install --yes --no-install-recommends openjdk-$JAVA_VERSION-jdk-headless
+RUN apt-get install -fyq
+RUN sudo rm -rf /var/lib/{apt,dpkg,cache,log}
+
+# create user
 ENV UID=1000
 ENV GID=1000
-ENV USER="developer"
-ENV JAVA_VERSION="8"
-ENV ANDROID_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-6858069_latest.zip"
-ENV ANDROID_VERSION="29"
-ENV ANDROID_BUILD_TOOLS_VERSION="29.0.3"
-ENV ANDROID_ARCHITECTURE="x86_64"
-ENV ANDROID_SDK_ROOT="/home/$USER/android"
+ENV USER="$USER"
+ENV HOME="/home/$USER"
+RUN groupadd --gid $GID $USER
+RUN useradd -s /bin/bash --uid $UID --gid $GID -m $USER
+RUN echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER
+RUN chmod 0440 /etc/sudoers.d/$USER
+
+# Run Variables
+ENV JAVA_VERSION="$JAVA_VERSION"
+ENV ANDROID_CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_BUILD}_latest.zip"
+ENV ANDROID_PLATFORM_VERSION="$ANDROID_PLATFORM_VERSION"
+ENV ANDROID_BUILD_TOOLS_VERSION="$ANDROID_BUILD_TOOLS_VERSION"
+# ENV ANDROID_ARCHITECTURE="x86_64"
+# RUN ANDROID_ARCHITECTURE=${ANDROID_ARCHITECTURE:-$(uname -m)}
+ENV ANDROID_HOME="$HOME/android"
+ENV ANDROID_SDK_ROOT="$ANDROID_HOME"
+ENV ANDROID_CMDLINE_TOOLS_ROOT="$ANDROID_HOME/cmdline-tools"
+ENV ANDROID_CMDLINE_TOOLS_HOME="$ANDROID_CMDLINE_TOOLS_ROOT/$ANDROID_CMDLINE_TOOLS_VERSION"
+ENV ANDROID_SDK_HOME="$HOME" ANDROID_USER_HOME="$HOME/.android"
 ENV FLUTTER_CHANNEL="stable"
-ENV FLUTTER_VERSION="2.2.1"
-ENV FLUTTER_URL="https://storage.googleapis.com/flutter_infra/releases/$FLUTTER_CHANNEL/linux/flutter_linux_$FLUTTER_VERSION-$FLUTTER_CHANNEL.tar.xz"
-ENV FLUTTER_HOME="/home/$USER/flutter"
+ENV FLUTTER_VERSION="$FLUTTER_VERSION"
+ENV FLUTTER_URL="https://storage.googleapis.com/flutter_infra_release/releases/$FLUTTER_CHANNEL/linux/flutter_linux_$FLUTTER_VERSION-$FLUTTER_CHANNEL.tar.xz"
+ENV FLUTTER_HOME="$HOME/flutter"
 ENV FLUTTER_WEB_PORT="8090"
 ENV FLUTTER_DEBUG_PORT="42000"
 ENV FLUTTER_EMULATOR_NAME="flutter_emulator"
-ENV PATH="$ANDROID_SDK_ROOT/cmdline-tools/tools/bin:$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/platforms:$FLUTTER_HOME/bin:$PATH"
-
-# install all dependencies
-ENV DEBIAN_FRONTEND="noninteractive"
-RUN apt-get update \
-  && apt-get install --yes --no-install-recommends openjdk-$JAVA_VERSION-jdk curl unzip sed git bash xz-utils libglvnd0 ssh xauth x11-xserver-utils libpulse0 libxcomposite1 libgl1-mesa-glx sudo \
-  && rm -rf /var/lib/{apt,dpkg,cache,log}
-
-# create user
-RUN groupadd --gid $GID $USER \
-  && useradd -s /bin/bash --uid $UID --gid $GID -m $USER \
-  && echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER \
-  && chmod 0440 /etc/sudoers.d/$USER
 
 USER $USER
-WORKDIR /home/$USER
+WORKDIR $HOME
+
+# RUN printenv
+# RUN export
 
 # android sdk
-RUN mkdir -p $ANDROID_SDK_ROOT \
-  && mkdir -p /home/$USER/.android \
-  && touch /home/$USER/.android/repositories.cfg \
-  && curl -o android_tools.zip $ANDROID_TOOLS_URL \
-  && unzip -qq -d "$ANDROID_SDK_ROOT" android_tools.zip \
-  && rm android_tools.zip \
-  && mkdir -p $ANDROID_SDK_ROOT/cmdline-tools/tools \
-  && mv $ANDROID_SDK_ROOT/cmdline-tools/bin $ANDROID_SDK_ROOT/cmdline-tools/tools \
-  && mv $ANDROID_SDK_ROOT/cmdline-tools/lib $ANDROID_SDK_ROOT/cmdline-tools/tools \
-  && yes "y" | sdkmanager "build-tools;$ANDROID_BUILD_TOOLS_VERSION" \
-  && yes "y" | sdkmanager "platforms;android-$ANDROID_VERSION" \
-  && yes "y" | sdkmanager "platform-tools" \
-  && yes "y" | sdkmanager "emulator" \
-  && yes "y" | sdkmanager "system-images;android-$ANDROID_VERSION;google_apis_playstore;$ANDROID_ARCHITECTURE"
+ENV PATH="$ANDROID_CMDLINE_TOOLS_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/platforms:$ANDROID_HOME/emulator:$PATH"
+RUN mkdir -p "$ANDROID_USER_HOME"
+RUN touch "$ANDROID_USER_HOME/repositories.cfg"
+RUN mkdir -p "$ANDROID_HOME"
+RUN mkdir -p "$ANDROID_CMDLINE_TOOLS_ROOT"
+RUN curl -s "$ANDROID_CMDLINE_TOOLS_URL" -o 'commandlinetools-linux--latest.zip'
+RUN unzip -qq 'commandlinetools-linux--latest.zip'
+# RUN mv "cmdline-tools" "${ANDROID_CMDLINE_TOOLS_HOME}"
+RUN rm 'commandlinetools-linux--latest.zip'
+RUN yes "y" | ./cmdline-tools/bin/sdkmanager --sdk_root="${ANDROID_HOME}" --install "cmdline-tools;${ANDROID_CMDLINE_TOOLS_VERSION}" > /dev/null
+RUN rm -rf cmdline-tools
+RUN yes "y" | sdkmanager --licenses > /dev/null
+RUN sdkmanager --version
+RUN sdkmanager --list_installed --include_obsolete
+RUN sdkmanager --install "tools" > /dev/null
+RUN sdkmanager --install "build-tools;$ANDROID_BUILD_TOOLS_VERSION" > /dev/null
+RUN sdkmanager --install "platforms;android-$ANDROID_PLATFORM_VERSION" > /dev/null
+RUN sdkmanager --install "platform-tools" > /dev/null
+RUN sdkmanager --install "emulator" > /dev/null
+RUN sdkmanager --install "system-images;android-$ANDROID_PLATFORM_VERSION;google_apis_playstore;${ANDROID_ARCHITECTURE:-$(uname -m)}" > /dev/null
+RUN sdkmanager --update > /dev/null
+RUN sdkmanager --list_installed --include_obsolete
+RUN sdkmanager --licenses > /dev/null
+
+RUN sudo apt update -y && sudo apt-get install -fyq chromium-browser
 
 # flutter
-RUN curl -o flutter.tar.xz $FLUTTER_URL \
-  && mkdir -p $FLUTTER_HOME \
-  && tar xf flutter.tar.xz -C /home/$USER \
-  && rm flutter.tar.xz \
-  && flutter config --no-analytics \
-  && flutter precache \
-  && yes "y" | flutter doctor --android-licenses \
-  && flutter doctor \
-  && flutter emulators --create \
-  && flutter update-packages
+ENV PATH="$FLUTTER_HOME/bin:$PATH"
+RUN curl -s $FLUTTER_URL -o flutter.tar.xz
+RUN mkdir -p $FLUTTER_HOME
+RUN tar xf flutter.tar.xz -C $HOME
+RUN rm -f flutter.tar.xz
+RUN flutter config --android-sdk="${ANDROID_HOME}"
+RUN flutter config --no-analytics
+RUN flutter precache
+RUN yes "y" | flutter doctor --android-licenses
+RUN flutter doctor
+RUN flutter emulators --create
+RUN flutter update-packages
 
 COPY entrypoint.sh /usr/local/bin/
 COPY chown.sh /usr/local/bin/
