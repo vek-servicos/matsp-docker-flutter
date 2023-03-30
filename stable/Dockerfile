@@ -1,5 +1,9 @@
 FROM ubuntu:20.04
 
+# Update apt
+ENV DEBIAN_FRONTEND="noninteractive"
+RUN apt-get update -y
+
 # Build Variables
 ARG ANDROID_BUILD_TOOLS_VERSION="30.0.3"
 ARG ANDROID_PLATFORM_VERSION="30"
@@ -9,11 +13,26 @@ ARG FLUTTER_VERSION="2.10.5"
 ARG JAVA_VERSION="11"
 ARG USER="developer"
 
-# install all dependencies
-ARG DEBIAN_FRONTEND="noninteractive"
-RUN apt-get update -y
-RUN apt-get install --yes --no-install-recommends sudo curl unzip sed git bash xz-utils libglvnd0 ssh xauth x11-xserver-utils libpulse0 libxcomposite1 libgl1-mesa-glx
-RUN apt-get install --yes --no-install-recommends openjdk-$JAVA_VERSION-jdk-headless
+# Set Timezone & Language
+ENV ACCEPT_EULA="Y"
+# ENV LANG="en_US.UTF-8"
+# ENV LANGUAGE="en_US:en"
+# ENV LC_ALL="en_US.UTF-8"
+ENV TZ="America/Sao_Paulo"
+ENV TIME_ZONE="$TZ"
+RUN export
+RUN echo "${TZ}" | tee /etc/timezone
+RUN ln -fs "/usr/share/zoneinfo/${TZ}" /etc/localtime
+# RUN dpkg-reconfigure -f noninteractive tzdata
+
+# Install dependencies
+# ENV DEBIAN_FRONTEND="noninteractive"
+# RUN apt-get update -y
+RUN apt-get install -fyq libxdamage1 libxtst6 libglu1-mesa
+RUN apt-get install -fyq sudo curl unzip sed git bash
+RUN apt-get install -fyq xz-utils libglvnd0 ssh xauth x11-xserver-utils libpulse0 libxcomposite1 libgl1-mesa-glx
+RUN apt-get install -fyq openjdk-$JAVA_VERSION-jdk
+RUN apt-get install -fyq chromium-browser
 RUN apt-get install -fyq
 RUN sudo rm -rf /var/lib/{apt,dpkg,cache,log}
 
@@ -34,7 +53,7 @@ ENV ANDROID_PLATFORM_VERSION="$ANDROID_PLATFORM_VERSION"
 ENV ANDROID_BUILD_TOOLS_VERSION="$ANDROID_BUILD_TOOLS_VERSION"
 # ENV ANDROID_ARCHITECTURE="x86_64"
 # RUN ANDROID_ARCHITECTURE=${ANDROID_ARCHITECTURE:-$(uname -m)}
-ENV ANDROID_HOME="$HOME/android"
+ENV ANDROID_HOME="$HOME/Android/sdk"
 ENV ANDROID_SDK_ROOT="$ANDROID_HOME"
 ENV ANDROID_CMDLINE_TOOLS_ROOT="$ANDROID_HOME/cmdline-tools"
 ENV ANDROID_CMDLINE_TOOLS_HOME="$ANDROID_CMDLINE_TOOLS_ROOT/$ANDROID_CMDLINE_TOOLS_VERSION"
@@ -78,8 +97,6 @@ RUN sdkmanager --update > /dev/null
 RUN sdkmanager --list_installed --include_obsolete
 RUN sdkmanager --licenses > /dev/null
 
-RUN sudo apt update -y && sudo apt-get install -fyq chromium-browser
-
 # flutter
 ENV PATH="$FLUTTER_HOME/bin:$PATH"
 RUN curl -s $FLUTTER_URL -o flutter.tar.xz
@@ -87,14 +104,19 @@ RUN mkdir -p $FLUTTER_HOME
 RUN tar xf flutter.tar.xz -C $HOME
 RUN rm -f flutter.tar.xz
 RUN flutter config --android-sdk="${ANDROID_HOME}"
-RUN flutter config --no-analytics
+RUN flutter config --enable-android
 RUN flutter precache
 RUN yes "y" | flutter doctor --android-licenses
 RUN flutter doctor
 RUN flutter emulators --create
 RUN flutter update-packages
 
-COPY entrypoint.sh /usr/local/bin/
-COPY chown.sh /usr/local/bin/
-COPY flutter-android-emulator.sh /usr/local/bin/flutter-android-emulator
+COPY --chmod=555 entrypoint.sh /usr/local/bin/
+COPY --chmod=555 chown.sh /usr/local/bin/
+COPY --chmod=555 flutter-android-emulator.sh /usr/local/bin/flutter-android-emulator
+COPY --chmod=555 flutter-web.sh /usr/local/bin/flutter-web
+# RUN chmod +x /usr/local/bin/entrypoint.sh
+# RUN chmod +x /usr/local/bin/chown.sh
+# RUN chmod +x /usr/local/bin/flutter-android-emulator
+# RUN chmod +x /usr/local/bin/flutter-web
 ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
