@@ -16,7 +16,7 @@ ARG USER="developer"
 # Set Timezone & Language
 ENV ACCEPT_EULA="Y"
 # ENV LANG="en_US.UTF-8"
-# ENV LANGUAGE="en_US:en"
+# ENV LANGUAGE="en_US.UTF-8"
 # ENV LC_ALL="en_US.UTF-8"
 ENV TZ="America/Sao_Paulo"
 ENV TIME_ZONE="$TZ"
